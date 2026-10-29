@@ -40,6 +40,18 @@
         dest: "{{ project_dir }}/docker/nginx/certs/server.crt"
         mode: "0644"
 
+    - name: Ensure mTLS certificate directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}/docker/nginx/certs/mtls"
+        state: directory
+        mode: "0755"
+
+    - name: Copy mTLS CA certificate to app server
+      ansible.builtin.copy:
+        src: "{{ source_dir }}/docker/nginx/certs/mtls/ca.crt"
+        dest: "{{ project_dir }}/docker/nginx/certs/mtls/ca.crt"
+        mode: "0644"
+
     - name: Copy TLS private key to app server
       ansible.builtin.copy:
         src: "{{ source_dir }}/docker/nginx/certs/server.key"
