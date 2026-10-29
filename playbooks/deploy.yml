@@ -1,0 +1,79 @@
+- import_playbook: install-docker.yml
+
+- name: Deploy KITAB WordPress stack
+  hosts: app-server
+  become: false
+  gather_facts: true
+
+  vars:
+    project_dir: "{{ ansible_env.HOME }}/jr-syseng"
+    source_dir: "{{ playbook_dir }}/.."
+
+  tasks:
+    - name: Ensure project dir exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Synchronize project source
+      ansible.posix.synchronize:
+        src: "{{ source_dir }}/"
+        dest: "{{ project_dir }}/"
+        archive: true
+        delete: false
+        rsync_opts:
+          - "--exclude=.env"
+          - "--exclude=.git/"
+          - "--exclude=docker/nginx/certs/"
+          - "--exclude=*.retry"
+
+    - name: Ensure Nginx certificate directory exists
+      ansible.builtin.file:
+        path: "{{ project_dir }}/docker/nginx/certs"
+        state: directory
+        mode: "0755"
+
+    - name: Copy TLS certificate to app server
+      ansible.builtin.copy:
+        src: "{{ source_dir }}/docker/nginx/certs/server.crt"
+        dest: "{{ project_dir }}/docker/nginx/certs/server.crt"
+        mode: "0644"
+
+    - name: Copy TLS private key to app server
+      ansible.builtin.copy:
+        src: "{{ source_dir }}/docker/nginx/certs/server.key"
+        dest: "{{ project_dir }}/docker/nginx/certs/server.key"
+        owner: "10003"
+        group: "10003"
+        mode: "0640"
+      become: true
+
+    - name: Set TLS private key ownership and permissions
+      become: true
+      ansible.builtin.file:
+        path: "{{ project_dir }}/docker/nginx/certs/server.key"
+        owner: "10003"
+        group: "10003"
+        mode: "0640"
+
+    - name: Build and start application stack
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: "{{ project_dir }}"
+      register: compose_up
+
+    - name: Display deployment output
+      ansible.builtin.debug:
+        var: compose_up.stdout_lines
+
+    - name: Verify application containers
+      ansible.builtin.command:
+        cmd: docker compose ps
+        chdir: "{{ project_dir }}"
+      register: compose_status
+      changed_when: false
+
+    - name: Display container status
+      ansible.builtin.debug:
+        var: compose_status.stdout_lines

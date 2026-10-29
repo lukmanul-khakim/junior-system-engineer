@@ -1,0 +1,20 @@
+# Environment secrets
+.env
+
+# Private TLS key dan generated certs
+docker/nginx/certs/*.key
+docker/nginx/certs/*.crt
+
+# Ansible generated files
+*.retry
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
