@@ -90,13 +90,15 @@
 
     - name: Build and start application stack
       become: true
-      community.docker.docker_compose_v2:
-        project_src: "{{ project_dir }}"
-        state: present
-        build: policy
-        wait: true
-        wait_timeout: 240
+      ansible.builtin.command:
+        cmd: docker compose up -d --build --wait --wait-timeout 240
+        chdir: "{{ project_dir }}"
       register: compose_up
+      changed_when: >
+        'Creating' in compose_up.stderr or
+        'Recreating' in compose_up.stderr or
+        'Building' in compose_up.stderr or
+        'Started' in compose_up.stderr
 
     - name: Display deployment output
       ansible.builtin.debug:

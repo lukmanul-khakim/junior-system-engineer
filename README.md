@@ -1,297 +1,150 @@
-# Junior System Engineer - KITAB
+# Junior System Engineer — KITAB
 
-## 1. Deskripsi Project
+Deployment WordPress dengan PostgreSQL dan Nginx menggunakan Docker Compose. Ansible digunakan untuk deployment dan konfigurasi firewall.
 
-Project ini membuat aplikasi WordPress menggunakan Docker dengan PostgreSQL sebagai database dan Nginx sebagai reverse proxy.
-
-Project juga menggunakan Ansible untuk mengatur server dan firewall.
-
-## 2. Referensi
-
-- **PG4WP (PostgreSQL for WordPress):** [GitHub Repository](https://github.com/PostgreSQL-For-Wordpress/postgresql-for-wordpress)
-- **Dokumentasi PG4WP:** [README resmi proyek](https://github.com/PostgreSQL-For-Wordpress/postgresql-for-wordpress/blob/v3/readme.md)
-
-PG4WP digunakan sebagai lapisan kompatibilitas agar WordPress dapat menggunakan PostgreSQL sebagai database. PG4WP merupakan proyek pihak ketiga, bukan komponen resmi WordPress.
-
-Dalam project ini, PG4WP dipasang melalui Dockerfile WordPress menggunakan versi `v3.4.1`.
-
-## 3. Technology Stack & Versions
-
-| Component | Version / Configuration |
-| Virtualization | Oracle VirtualBox |
-| VM Provisioning | Vagrant |
-| Operating System | Ubuntu Server 22.04 LTS (Jammy) |
-| Container Runtime | Docker Engine 29.9.2 |
-| Container Orchestration | Docker Compose v5.6.1 |
-| Reverse Proxy | Nginx 1.26-bookworm |
-| Application | WordPress 6.5.3 with PHP 8.2-FPM |
-| Database | PostgreSQL 14-bookworm |
-| PostgreSQL Compatibility Layer | PG4WP v3.4.1 |
-| Configuration Management | Ansible 2.10.8 |
-
-**Environment Overview**
-
-- `control-node`: Ansible control machine used to automate deployment and firewall configuration.
-- `app-server`: Target VM running the WordPress, PostgreSQL, and Nginx containers.
-- `Vagrant + VirtualBox`: Used to provision and run the lab virtual machines.
-- `Docker Compose`: Used to build and manage the multi-container application.
-
-
-## 4. Arsitektur
-
-### Diagram Arsitektur Aplikasi
+## Arsitektur
 
 ```mermaid
 flowchart TD
-    U["Pengguna / Browser"] -->|"HTTPS :443"| N["Nginx Reverse Proxy"]
-    N -->|"HTTP"| W["WordPress / PHP-FPM"]
-    W -->|"PostgreSQL :5432"| D[("PostgreSQL Database")]
+    U[Browser] -->|HTTPS :443 / mTLS| N[Nginx\n10.10.10.3]
+    N -->|HTTP / PHP-FPM| W[WordPress\n10.10.10.2]
+    W -->|PostgreSQL :5432| D[(PostgreSQL\n10.10.30.3)]
 
-    subgraph Docker["Docker Compose - app-server"]
-        N
-        W
-        D
+    subgraph FE[frontend - 10.10.10.0/24]
+      N
+      W
     end
-
-    N --- F["frontend: 10.10.10.0/24"]
-    W --- A["app: 10.10.20.0/24"]
-    W --- B["backend: 10.10.30.0/24"]
-
-```
-## 5. Network dan IP Plan
-
-### 5.1 IP Plan Docker Network
-
-Project menggunakan tiga Docker bridge network untuk mendefinisikan segmentasi komunikasi layanan.
-
-| Network | Subnet | Anggota | Fungsi |
-|---|---|---|---|
-| frontend | 10.10.10.0/24 | Nginx, WordPress | Jalur komunikasi reverse proxy ke aplikasi |
-| app | 10.10.20.0/24 | WordPress | Network khusus aplikasi sesuai rancangan topologi |
-| backend | 10.10.30.0/24 | WordPress, PostgreSQL | Jalur komunikasi aplikasi ke database |
-
-### 5.2 IP Container
-
-| Container | Network | IP |
-|---|---|---|
-| Nginx | frontend | 10.10.10.3 |
-| WordPress | frontend | 10.10.10.2 |
-| WordPress | app | 10.10.20.2 |
-| WordPress | backend | 10.10.30.3 |
-| PostgreSQL | backend | 10.10.30.2 |
-
-Alamat di atas merupakan hasil verifikasi saat deployment. IP container dapat berubah apabila container atau network dibuat ulang.
-
-WordPress terhubung ke frontend untuk menerima request dari Nginx dan ke backend untuk mengakses PostgreSQL. Network `app` saat ini hanya memiliki WordPress sebagai anggotanya. PostgreSQL tidak tergabung dalam frontend dan tidak memublikasikan port ke host.
-
-Network backend menggunakan opsi `internal: true` untuk membatasi konektivitas eksternal melalui network tersebut.
-
-### 5.3 IP Plan Host
-
-| Host | IP host-only | Peran |
-|---|---|---|
-| control-node | 192.168.56.16 | Menjalankan Ansible dan menyimpan source project |
-| app-server | 192.168.56.17 | Menjalankan Docker Engine, Compose, dan seluruh container aplikasi |
-
-Kedua VM menggunakan jaringan host-only VirtualBox `192.168.56.0/24` untuk komunikasi antara control-node dan app-server. Subnet Docker `10.10.10.0/24`, `10.10.20.0/24`, dan `10.10.30.0/24` merupakan jaringan internal layanan container, bukan alamat host VM.
-
-### 5.4 Alasan Segmentasi
-
-- **Frontend:** memisahkan jalur akses reverse proxy dan aplikasi dari database.
-- **App:** menyediakan network aplikasi tersendiri sesuai rancangan topologi.
-- **Backend:** membatasi keanggotaan network database pada WordPress dan PostgreSQL.
-- **Host-only:** memungkinkan Ansible mengelola app-server melalui jaringan lab tanpa menggunakan alamat container sebagai alamat host.
-
-Segmentasi ini membatasi konektivitas berdasarkan keanggotaan network. Ini bukan pengganti autentikasi database atau pengujian keamanan menyeluruh.
-
-## 6. Persiapan
-
-Pastikan perangkat berikut tersedia:
-
-- Ubuntu Server
-- Docker
-- Docker Compose
-- Ansible
-- OpenSSL
-- Git
-
-## 7. Konfigurasi Environment
-
-Buat file `.env`, kemudian isi konfigurasi database.
-
-Contoh variabel:
-
-- POSTGRES_DB
-- POSTGRES_USER
-- POSTGRES_PASSWORD
-
-Gunakan password yang kuat. Jangan mengunggah file `.env` yang berisi password ke GitHub.
-
-## 8. Menjalankan Aplikasi
-
-Masuk ke direktori project:
-
-```bash
-cd jr-syseng
+    subgraph APP[app - 10.10.20.0/24]
+      W2[WordPress\n10.10.20.2]
+    end
+    subgraph BE[backend - 10.10.30.0/24]
+      W3[WordPress\n10.10.30.2]
+      D
+    end
 ```
 
-Buat sertifikat HTTPS:
+| Host / container | IP | Fungsi |
+|---|---|---|
+| `control-node` | `192.168.56.16` | Ansible dan source project |
+| `app-server` | `192.168.56.19` | Docker host |
+| Nginx | `10.10.10.3` | Reverse proxy, HTTPS, mTLS |
+| WordPress | `10.10.10.2`, `10.10.20.2`, `10.10.30.2` | Aplikasi; terhubung ke tiga network |
+| PostgreSQL | `10.10.30.3` | Database; hanya di backend |
+
+Network `frontend`, `app`, dan `backend` memakai subnet `10.10.10.0/24`, `10.10.20.0/24`, dan `10.10.30.0/24`. PostgreSQL hanya terhubung ke `backend`; port `5432` tidak dipublikasikan ke host dan tidak dapat diakses langsung dari Nginx.
+
+## Komponen
+
+- Dockerfile custom untuk Nginx, WordPress, dan PostgreSQL; ketiganya dibangun melalui `build:`.
+- Semua container berjalan non-root (UID ≥ 10000) dan memiliki healthcheck.
+- WordPress menggunakan PG4WP `v3.4.1` untuk kompatibilitas PostgreSQL.
+- Nginx menangani HTTPS dan mewajibkan client certificate melalui mTLS.
+- Ansible melakukan instalasi Docker, sinkronisasi project, deployment Compose, dan konfigurasi UFW.
+
+## Deployment
+
+Jalankan dari `control-node`. Siapkan `.env` berdasarkan `.env.example` dan pastikan file tersebut tidak di-commit.
 
 ```bash
+cd ~/jr-syseng
 make cert
-```
-
-Build image:
-
-```bash
-make build
-```
-
-Jalankan aplikasi:
-
-```bash
-make up
-```
-
-Melihat status container:
-
-```bash
-docker compose ps
-```
-
-Melihat log aplikasi:
-
-```bash
-make logs
-```
-
-Menghentikan aplikasi:
-
-```bash
-make down
-```
-
-Menghapus container, image lokal, volume, dan sertifikat project:
-
-```bash
-make clean
-```
-
-Perhatian: perintah `make clean` menghapus volume database, sehingga data WordPress dapat hilang.
-
-## 9. Akses HTTPS
-
-Domain lab:
-
-https://wordpress.kitab.test
-
-Tambahkan konfigurasi berikut pada file hosts di komputer yang digunakan untuk membuka browser:
-
-```text
-192.168.56.17 wordpress.kitab.test
-```
-
-Project menggunakan sertifikat self-signed. Browser dapat menampilkan peringatan keamanan karena sertifikat dibuat sendiri untuk kebutuhan lab.
-
-## 10. Firewall dengan Ansible
-
-Firewall dikonfigurasi menggunakan UFW melalui Ansible.
-
-Port yang diizinkan:
-
-| Port | Fungsi |
-|---|---|
-| 22 | SSH untuk administrasi server |
-| 80 | HTTP |
-| 443 | HTTPS |
-
-Menjalankan konfigurasi firewall:
-
-```bash
+ansible-playbook -i inventory/hosts.ini playbooks/deploy.yml
 ansible-playbook -i inventory/hosts.ini playbooks/firewall.yml
 ```
 
-Memeriksa status firewall:
-
-```bash
-ansible app-server -i inventory/hosts.ini -b -m command -a "ufw status"
-```
-
-Hasil verifikasi:
-
-- Status UFW: active
-- SSH: diizinkan
-- HTTP: diizinkan
-- HTTPS: diizinkan
-- Eksekusi playbook kedua: tidak menghasilkan perubahan baru (changed=0)
-
-Hasil tersebut menunjukkan konfigurasi firewall dapat dijalankan berulang kali tanpa perubahan yang tidak diperlukan.
-
-## 11. Verifikasi Container
-
-Memeriksa status container:
-
-```bash
-ansible app-server -i inventory/hosts.ini -m shell -a "cd ~/jr-syseng && docker compose ps"
-```
-
-Hasil verifikasi:
-
-- Nginx: healthy
-- WordPress: healthy
-- PostgreSQL: healthy
-
-Pemeriksaan user container:
-
-- Nginx: UID 10003
-- WordPress: UID 10002
-- PostgreSQL: UID 10001
-
-Ketiga container berjalan menggunakan UID minimal 10000.
-
-Verifikasi database menunjukkan 12 tabel WordPress berhasil dibuat di PostgreSQL.
-
-## 12. Bukti Dokumentasi
-
-Screenshot pada folder `docs/screenshots/`:
-
-1. Website WordPress berhasil dibuka melalui HTTPS.
-2. Status container menunjukkan ketiga layanan healthy.
-3. Hasil pemeriksaan UID container.
-4. Hasil pemeriksaan network Docker.
-5. Status UFW active dan daftar port yang diizinkan.
-6. Eksekusi kedua playbook firewall dengan changed=0.
-
-## 13. Struktur Project
+Tambahkan pemetaan domain pada file `hosts` komputer yang digunakan untuk membuka browser:
 
 ```text
-jr-syseng/
-├── ansible.cfg
-├── inventory/
-│   └── hosts.ini
+192.168.56.19 wordpress.kitab.test
+```
+
+Akses `https://wordpress.kitab.test`. Sertifikat server self-signed perlu dipercaya browser agar tidak muncul peringatan trust. Untuk mTLS, browser juga perlu memiliki client certificate yang ditandatangani CA lab.
+
+## Verifikasi
+
+```bash
+# Status container
+ansible app -i inventory/hosts.ini -m shell -a \
+  "cd ~/jr-syseng && docker compose ps"
+
+# Status firewall
+ansible app -i inventory/hosts.ini -b -m shell -a "ufw status verbose"
+```
+
+UFW mengizinkan `22/tcp` (SSH), `80/tcp` (HTTP), dan `443/tcp` (HTTPS). Hasil deployment terakhir menunjukkan ketiga container `healthy`. Playbook firewall diuji ulang dengan `changed=0`.
+
+### Verifikasi mTLS
+
+| Pengujian | Hasil |
+|---|---|
+| Client tanpa certificate | `HTTP 400 Bad Request` — ditolak |
+| Client dengan certificate valid | `HTTP 200 OK` — diterima |
+| Browser dengan `KITAB Test Client` | Halaman login WordPress tampil |
+
+Contoh pengujian dari `control-node`:
+
+```bash
+# Tanpa client certificate: diharapkan HTTP 400
+curl -k -I --resolve wordpress.kitab.test:443:192.168.56.19 \
+  https://wordpress.kitab.test/
+
+# Dengan client certificate: diharapkan HTTP 200
+curl -k -I \
+  --cert docker/nginx/certs/mtls/client.crt \
+  --key docker/nginx/certs/mtls/client.key \
+  --resolve wordpress.kitab.test:443:192.168.56.19 \
+  https://wordpress.kitab.test/
+```
+
+## Operasional
+
+```bash
+make build   # Build image
+make up      # Jalankan aplikasi
+make logs    # Lihat log
+make down    # Hentikan aplikasi
+make clean   # Hapus container, image lokal, volume, dan sertifikat
+```
+
+> `make clean` menghapus volume database sehingga data WordPress/PostgreSQL akan hilang.
+
+## Bonus CI/CD
+
+GitHub Actions berhasil menjalankan build dan publish image ke Docker Hub:
+
+- `lukmankhakim09/jr-syseng-nginx`
+- `lukmankhakim09/jr-syseng-wordpress`
+- `lukmankhakim09/jr-syseng-postgres`
+
+## Screenshot
+
+| Bukti | Keterangan |
+|---|---|
+| ![Containers healthy](docs/screenshots/01-containers-healthy.png) | Ketiga container berstatus healthy |
+| ![Network isolation](docs/screenshots/02-network-isolation.png) | WordPress dapat mengakses PostgreSQL, sedangkan Nginx tidak |
+| ![Firewall](docs/screenshots/03-firewall-ufw.png) | UFW aktif dan port yang diizinkan |
+| ![WordPress HTTPS](docs/screenshots/04-wordpress-https.png) | Dashboard WordPress melalui HTTPS |
+| ![mTLS certificate prompt](docs/screenshots/05-mtls-client-certificate-prompt.png) | Browser meminta client certificate |
+| ![mTLS WordPress login](docs/screenshots/06-mtls-wordpress-login.png) | Halaman login tampil setelah client certificate diterima |
+
+## Keamanan
+
+Jangan commit `.env`, `server.key`, `ca.key`, `client.key`, atau file `.p12`. `ca.crt` adalah sertifikat publik yang dipakai Nginx untuk memverifikasi client. Gunakan private key hanya pada host yang memerlukannya.
+
+## Struktur utama
+
+```text
+.
+├── .github/workflows/ci.yml
+├── inventory/hosts.ini
 ├── playbooks/
-│   ├── deploy.yml
-│   ├── firewall.yml
-│   └── install-docker.yml
-├── roles/
-│   └── firewall/
-│       └── tasks/
-│           └── main.yml
-├── docker/
-│   ├── nginx/
-│   │   ├── Dockerfile
-│   │   ├── openssl.cnf
-│   │   ├── conf/
-│   │   │   └── nginx.conf
-│   │   └── certs/             # Sertifikat lokal, tidak di-commit
-│   ├── wordpress/
-│   │   ├── Dockerfile
-│   │   └── www.conf
-│   └── postgres/
-│       └── Dockerfile
+├── roles/firewall/
+├── docker/nginx/
+├── docker/wordpress/
+├── docker/postgres/
+├── docs/screenshots/
 ├── compose.yml
 ├── Makefile
 ├── .env.example
-├── .gitignore
 └── README.md
 ```

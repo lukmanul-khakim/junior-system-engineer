@@ -1,3 +1,4 @@
+
 services:
   nginx:
     build:
@@ -7,11 +8,11 @@ services:
       - "443:8443"
     volumes:
       - wordpress_data:/var/www/html:ro
-      - ./docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf/nginx-mtls.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/certs:/etc/nginx/certs:ro
     networks:
-      - frontend:
-          ipv4_address: 10.10.10.2
+      frontend:
+        ipv4_address: 10.10.10.3
     depends_on:
       wordpress:
         condition: service_healthy
@@ -28,12 +29,12 @@ services:
     volumes:
       - wordpress_data:/var/www/html
     networks:
-      - frontend:
-          ipv4_address: 10.10.10.3
-      - app:
-          ipv4_address: 10.10.10.2
-      - backend:
-          ipv4_address: 10.10.10.2
+      frontend:
+        ipv4_address: 10.10.10.2
+      app:
+        ipv4_address: 10.10.20.2
+      backend:
+        ipv4_address: 10.10.30.2
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,8 +50,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - backend:
-          ipv4_address: 10.10.10.2
+      backend:
+        ipv4_address: 10.10.30.3
     restart: unless-stopped
 
 networks:
