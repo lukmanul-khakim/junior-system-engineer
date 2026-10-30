@@ -25,8 +25,8 @@ flowchart TD
 
 | Host / container | IP | Fungsi |
 |---|---|---|
-| `control-node` | `192.168.56.16` | Ansible dan source project |
-| `app-server` | `192.168.56.19` | Docker host |
+| `control-node` | `192.168.56.18` | Ansible dan source project |
+| `app` | `192.168.56.19` | Docker host |
 | Nginx | `10.10.10.3` | Reverse proxy, HTTPS, mTLS |
 | WordPress | `10.10.10.2`, `10.10.20.2`, `10.10.30.2` | Aplikasi; terhubung ke tiga network |
 | PostgreSQL | `10.10.30.3` | Database; hanya di backend |
