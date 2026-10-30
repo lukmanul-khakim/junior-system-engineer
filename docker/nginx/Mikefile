@@ -1,0 +1,5 @@
+up-mtls: cert
+	$(COMPOSE) -f compose.yml -f compose.mtls.yml up -d --build
+
+down-mtls:
+	$(COMPOSE) -f compose.yml -f compose.mtls.yml down

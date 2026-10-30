@@ -1,7 +1,8 @@
+
 - import_playbook: install-docker.yml
 
 - name: Deploy KITAB WordPress stack
-  hosts: app-server
+  hosts: app
   become: false
   gather_facts: true
 
@@ -10,7 +11,27 @@
     source_dir: "{{ playbook_dir }}/.."
 
   tasks:
-    - name: Ensure project dir exists
+    - name: Check required deployment files on control node
+      ansible.builtin.stat:
+        path: "{{ source_dir }}/{{ item }}"
+      loop:
+        - .env
+        - docker/nginx/certs/server.crt
+        - docker/nginx/certs/server.key
+        - docker/nginx/certs/mtls/ca.crt
+      register: deployment_files
+      delegate_to: localhost
+      become: false
+
+    - name: Stop if a required deployment file is missing
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Required deployment file is missing on control node: {{ item.item }}"
+      loop: "{{ deployment_files.results }}"
+
+    - name: Ensure project directory exists
       ansible.builtin.file:
         path: "{{ project_dir }}"
         state: directory
@@ -28,17 +49,32 @@
           - "--exclude=docker/nginx/certs/"
           - "--exclude=*.retry"
 
+    - name: Copy environment configuration
+      ansible.builtin.copy:
+        src: "{{ source_dir }}/.env"
+        dest: "{{ project_dir }}/.env"
+        mode: "0600"
+
     - name: Ensure Nginx certificate directory exists
       ansible.builtin.file:
         path: "{{ project_dir }}/docker/nginx/certs"
         state: directory
         mode: "0755"
 
-    - name: Copy TLS certificate to app server
+    - name: Copy TLS certificate
       ansible.builtin.copy:
         src: "{{ source_dir }}/docker/nginx/certs/server.crt"
         dest: "{{ project_dir }}/docker/nginx/certs/server.crt"
         mode: "0644"
+
+    - name: Copy TLS private key
+      become: true
+      ansible.builtin.copy:
+        src: "{{ source_dir }}/docker/nginx/certs/server.key"
+        dest: "{{ project_dir }}/docker/nginx/certs/server.key"
+        owner: "10003"
+        group: "10003"
+        mode: "0640"
 
     - name: Ensure mTLS certificate directory exists
       ansible.builtin.file:
@@ -46,33 +82,20 @@
         state: directory
         mode: "0755"
 
-    - name: Copy mTLS CA certificate to app server
+    - name: Copy mTLS CA certificate
       ansible.builtin.copy:
         src: "{{ source_dir }}/docker/nginx/certs/mtls/ca.crt"
         dest: "{{ project_dir }}/docker/nginx/certs/mtls/ca.crt"
         mode: "0644"
 
-    - name: Copy TLS private key to app server
-      ansible.builtin.copy:
-        src: "{{ source_dir }}/docker/nginx/certs/server.key"
-        dest: "{{ project_dir }}/docker/nginx/certs/server.key"
-        owner: "10003"
-        group: "10003"
-        mode: "0640"
-      become: true
-
-    - name: Set TLS private key ownership and permissions
-      become: true
-      ansible.builtin.file:
-        path: "{{ project_dir }}/docker/nginx/certs/server.key"
-        owner: "10003"
-        group: "10003"
-        mode: "0640"
-
     - name: Build and start application stack
-      ansible.builtin.command:
-        cmd: docker compose up -d --build
-        chdir: "{{ project_dir }}"
+      become: true
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_dir }}"
+        state: present
+        build: policy
+        wait: true
+        wait_timeout: 240
       register: compose_up
 
     - name: Display deployment output
@@ -80,6 +103,7 @@
         var: compose_up.stdout_lines
 
     - name: Verify application containers
+      become: true
       ansible.builtin.command:
         cmd: docker compose ps
         chdir: "{{ project_dir }}"

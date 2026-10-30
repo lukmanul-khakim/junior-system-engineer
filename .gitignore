@@ -1,6 +1,13 @@
 # Environment secrets
 .env
 
+# TLS private keys and generated certificates
+docker/nginx/certs/**/*.key
+docker/nginx/certs/**/*.csr
+docker/nginx/certs/**/*.p12
+docker/nginx/certs/server.crt
+docker/nginx/certs/mtls/client.crt
+
 # Private TLS key dan generated certs
 docker/nginx/certs/*.key
 docker/nginx/certs/*.crt

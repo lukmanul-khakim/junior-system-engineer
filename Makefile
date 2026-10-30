@@ -29,4 +29,5 @@ logs:
 
 clean:
 	$(COMPOSE) down --rmi local --volumes --remove-orphans
-	rm -f docker/nginx/certs/server.crt docker/nginx/certs/server.key
+	rm -rf docker/nginx/certs/*
+	@echo "Project containers, volumes, local images, and certificates removed."

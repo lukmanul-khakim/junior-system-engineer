@@ -1,5 +1,6 @@
+
 - name: Install Docker on Application Server
-  hosts: app-server
+  hosts: app
   become: true
   gather_facts: true
 
@@ -13,24 +14,48 @@
           - ca-certificates
           - curl
           - gnupg
+          - rsync
         state: present
         update_cache: true
         cache_valid_time: 3600
 
-    - name: Create directory for Docker GPG Key
+    - name: Install rsync on Ansible control node
+      ansible.builtin.apt:
+        name: rsync
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      delegate_to: localhost
+      become: true
+
+    - name: Create directory for Docker GPG key
       ansible.builtin.file:
         path: /etc/apt/keyrings
         state: directory
         owner: root
         group: root
-        mode: '0755'
+        mode: "0755"
+
+    - name: Download Docker official GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+
+    - name: Remove legacy Docker repository configuration
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
 
     - name: Configure Docker official repository
       ansible.builtin.copy:
         dest: /etc/apt/sources.list.d/docker.sources
         owner: root
         group: root
-        mode: '0644'
+        mode: "0644"
         content: |
           Types: deb
           URIs: https://download.docker.com/linux/ubuntu
@@ -43,7 +68,7 @@
       ansible.builtin.apt:
         update_cache: true
 
-    - name: Insall official Docker Engine and plugins
+    - name: Install official Docker Engine and plugins
       ansible.builtin.apt:
         name:
           - docker-ce
@@ -52,9 +77,8 @@
           - docker-buildx-plugin
           - docker-compose-plugin
         state: present
-        update_cache: true
 
-    - name: Ensure Docker service enabled & running
+    - name: Ensure Docker service is enabled and running
       ansible.builtin.service:
         name: docker
         state: started
@@ -71,7 +95,7 @@
         groups: docker
         append: true
 
-    - name: verify Docker installation
+    - name: Verify Docker installation
       ansible.builtin.command:
         cmd: docker --version
       register: docker_version
@@ -81,12 +105,12 @@
       ansible.builtin.debug:
         var: docker_version.stdout
 
-    - name: verify Docker Compose Plugin
+    - name: Verify Docker Compose Plugin
       ansible.builtin.command:
         cmd: docker compose version
       register: compose_version
       changed_when: false
 
-    - name: Display Docker Compose Version
+    - name: Display Docker Compose version
       ansible.builtin.debug:
         var: compose_version.stdout

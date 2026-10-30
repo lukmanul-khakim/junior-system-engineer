@@ -1,6 +1,6 @@
 ---
 - name: Configure application server firewall
-  hosts: app-server
+  hosts: app
   become: true
 
   roles:
