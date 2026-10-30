@@ -2,6 +2,21 @@
 
 Deployment WordPress dengan PostgreSQL dan Nginx menggunakan Docker Compose. Ansible digunakan untuk deployment dan konfigurasi firewall.
 
+## Technology Stack & Versions
+
+| Component | Version / Configuration |
+|---|---|
+| Virtualization | Oracle VirtualBox |
+| VM Provisioning | Vagrant |
+| Operating System | Ubuntu Server 22.04 LTS (Jammy) |
+| Container Runtime | Docker Engine 29.9.2 |
+| Container Orchestration | Docker Compose v5.6.1 |
+| Reverse Proxy | Nginx 1.26-bookworm |
+| Application | WordPress 6.5.3 with PHP 8.2-FPM |
+| Database | PostgreSQL 14-bookworm |
+| PostgreSQL Compatibility Layer | PG4WP v3.4.1 |
+| Configuration Management | Ansible 2.10.8 |
+
 ## Arsitektur
 
 ```mermaid
